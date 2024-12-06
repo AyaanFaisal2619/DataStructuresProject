@@ -7,6 +7,7 @@ using namespace std;
 // Structure for Nodes (Intersections)
 struct Nodes {
     string name;  // Name of the intersection
+    int timing;
 
     Nodes() : name("") {}
     Nodes(string n) : name(n) {}
@@ -78,7 +79,7 @@ public:
     }
 
     // Create a new node
-    void createNode(const string& name) {
+    void createNode(const string& name, int timings) {
         // Check if the node already exists
         if (findNode(name) != nullptr) {
             cout << "Node with the name '" << name << "' already exists!" << endl;
@@ -99,11 +100,23 @@ public:
     void createEdges(const string& from, const string& to, int weight) {
         Nodes* fromNode = findNode(from);
         Nodes* toNode = findNode(to);
+
         if (fromNode && toNode) {
+            // Check for duplicate edges
+            for (int i = 0; i < numEdges; i++) {
+                if (streets[i].from == fromNode && streets[i].to == toNode) {
+                    cout << "Edge from '" << from << "' to '" << to << "' already exists. Updating weight to " << weight << "." << endl;
+                    streets[i].weight = weight; // Update the weight of the existing edge
+                    return;
+                }
+            }
+
+            // If no duplicate, add the new edge
             if (numEdges == edgeCapacity) {
                 resizeEdges();
             }
             streets[numEdges++] = Edges(fromNode, toNode, weight);
+            cout << "Edge from '" << from << "' to '" << to << "' with weight " << weight << " has been added." << endl;
         } else {
             cout << "Error: One or both nodes not found!" << endl;
         }
@@ -115,12 +128,19 @@ public:
 
         // Dynamically allocate nodes array
         string name;
+        int timings;
         while (true) {
             cout << "Enter node name: ";
             cin >> name;
             if (name == "-1") break;
+            cout<<"Enter GreennTime: ";
+            cin>>timings;
+            
 
-            createNode(name);  // Call the createNode function to add a node
+            createNode(name,timings);  // Call the createNode function to add a node
+            ofstream file("traffic_signal_timings.csv", std::ios::app);
+            file << name <<',' << timings<< endl; 
+            file.close();
         }
     }
 
@@ -158,9 +178,7 @@ public:
         }
     }
 
-    // Delete a node and its associated edges
     void DeleteNode(const string& name) {
-        // Find the node
         Nodes* node = findNode(name);
         if (node == nullptr) {
             cout << "Node not found!" << endl;
@@ -177,7 +195,7 @@ public:
                 }
                 numEdges--;
             } else {
-                i++; // Only increment if we don't remove the edge (to avoid skipping)
+                i++;
             }
         }
 
@@ -191,48 +209,175 @@ public:
         }
 
         if (nodeIndex != -1) {
-            // Shift nodes to remove the deleted node
             for (int i = nodeIndex; i < numNodes - 1; i++) {
                 intersections[i] = intersections[i + 1];
             }
             numNodes--;
         }
 
+        // Update files
+        updateNodeFile(name);
+        updateEdgeFile(name);
+
         cout << "Node " << name << " and its associated edges have been deleted." << endl;
+}
+
+    void traffic_signal_timings(){
+        ifstream file1("traffic_signal_timings.csv");
+        string node;
+        int timings;
+        if (file1.good()) {
+            string header;
+            getline(file1,header);
+        }
+        
+        while(file1.good()){
+            getline(file1, node, ',');  // Get the first node (before comma)
+            file1>>timings;
+            file1.ignore(__LONG_MAX__,'\n');
+            if(node != ""){
+                createNode(node,timings);
+            }
+        }
+
+
     }
 
     // Load the road network from a CSV file
     void road_Network() {
-    ifstream file("road_network.csv");
-    string node1, node2;
-    int weight;
+        ifstream file("road_network.csv");
+        string from_node, to_node;
+        int weight;
 
-    // Skip the header line (if there's one)
-    if (file.good()) {
-        string header;
-        getline(file, header);
-    }
+        // Skip the header line (if there's one)
+        if (file.good()) {
+            string header;
+            getline(file, header);
 
-    while (file.good()) {
-        // Read node1, node2, and weight in a loop
-        getline(file, node1, ',');  // Get the first node (before comma)
-        getline(file, node2, ',');  // Get the second node (after comma)
-        file >> weight;             // Get the weight (after the comma)
-        
-        // Skip the newline character after weight
-        file.ignore(__LONG_MAX__,'\n');
+        }
 
-        if (!node1.empty() && !node2.empty()) {
-            createNode(node1);  // Create the first node if not already created
-            createNode(node2);  // Create the second node if not already created
-            createEdges(node1, node2, weight); 
+        while (file.good()) {
+            // Read node1, node2, and weight in a loop
+            getline(file, from_node, ',');  // Get the first node (before comma)
+            getline(file, to_node, ',');  // Get the second node (after comma)
+            file >> weight;             // Get the weight (after the comma)
+            
+            // Skip the newline character after weight
+            file.ignore(__LONG_MAX__,'\n');
 
-            // Create the edge between the nodes
+            if (!from_node.empty() && !to_node.empty()) {
+                createEdges(from_node, to_node, weight); 
+
+                // Create the edge between the nodes
+            }
+        }
+
+        file.close();  // Ensure to close the file after processing
+}
+
+
+void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
+    // Find and remove the edge from the graph
+    int i = 0;
+    while (i < numEdges) {
+        if (streets[i].from->name == fromNode && streets[i].to->name == toNode && streets[i].weight == weight) {
+            // Shift elements to remove the edge
+            for (int j = i; j < numEdges - 1; j++) {
+                streets[j] = streets[j + 1];
+            }
+            numEdges--;
+            cout << "Edge " << fromNode << " -> " << toNode << " (Weight: " << weight << ") has been deleted from the graph." << endl;
+            break;
+        } else {
+            i++;
         }
     }
 
-    file.close();  // Ensure to close the file after processing
+    // Update the edge file
+    updateEdgeFile(fromNode);
 }
+
+    void updateEdgeFile(const string& nodeName) {
+        ifstream infile("road_network.csv");
+        ofstream outfile("temp.csv");
+
+        string from, to;
+        int weight;
+
+        bool headerRead = false;
+        
+        while (infile.good()) {
+             if (!headerRead) {
+                string header;
+                getline(infile, header);  // Read the header and write it to the temp file.
+                outfile << header << endl;
+                headerRead = true;
+            }
+            // Read the edge data (from node, to node, weight)
+            getline(infile, from, ',');
+            getline(infile, to, ',');
+            infile >> weight;
+            infile.ignore(__LONG_MAX__, '\n');  // Skip the rest of the line.
+
+            // Skip edges that involve the deleted node (either as 'from' or 'to')
+            if (from == nodeName ) {
+                getline(infile, to, ',');
+                infile >> weight;
+                continue;  // Skip the current edge and move to the next one
+            }else if(to == nodeName) {
+                infile >> weight;
+            }
+            else {
+                outfile << from << "," << to << "," << weight << endl;  // Write the edge to the temp file
+            }
+        }
+
+        infile.close();
+        outfile.close();
+
+        // Replace the original file with the updated file
+        remove("road_network.csv");
+        rename("temp.csv", "road_network.csv");
+    }
+
+    void updateNodeFile(const string& nodeName) {
+        ifstream infile("traffic_signal_timings.csv");
+        ofstream outfile("temp.csv");
+
+        string node;
+        int timings;
+
+        bool headerRead = false;
+
+        while (infile.good()) {
+            if (!headerRead) {
+                string header;
+                getline(infile, header);  // Read the header and write it to the temp file.
+                outfile << header << endl;
+                headerRead = true;
+            }
+            
+            getline(infile, node, ',');
+            if (node.empty()) continue;  // Skip any empty lines.
+            
+            infile >> timings;
+            infile.ignore(__LONG_MAX__, '\n');  // Skip the rest of the line.
+
+            // Only write the node if it is not the one being deleted
+            if (node != nodeName) {
+                outfile << node << "," << timings << endl;
+            }
+        }
+
+        infile.close();
+        outfile.close();
+
+        // Replace the original file with the updated file
+        remove("traffic_signal_timings.csv");
+        rename("temp.csv", "traffic_signal_timings.csv");
+    }
+
+
 
 
 };
@@ -242,6 +387,7 @@ int main() {
     Graph graph;
     bool running = true;
     cout<<"Reading File Data..."<<endl;
+    graph.traffic_signal_timings();
     graph.road_Network();
     cout<<"File read successfully"<<endl;
     while (running) {
