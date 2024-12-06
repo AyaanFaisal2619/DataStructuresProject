@@ -137,6 +137,9 @@ public:
             cin >> to >> weight;
 
             createEdges(from, to, weight);  // Call the createEdges function to add an edge
+            ofstream file("road_network.csv", std::ios::app);
+            file << from << "," << to << "," << weight << endl; 
+            file.close();
         }
     }
 
@@ -222,12 +225,16 @@ public:
         if (!node1.empty() && !node2.empty()) {
             createNode(node1);  // Create the first node if not already created
             createNode(node2);  // Create the second node if not already created
-            createEdges(node1, node2, weight);  // Create the edge between the nodes
+            createEdges(node1, node2, weight); 
+
+            // Create the edge between the nodes
         }
     }
 
     file.close();  // Ensure to close the file after processing
 }
+
+
 };
 
 // Main function with interactive menu
