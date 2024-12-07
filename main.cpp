@@ -22,7 +22,15 @@ struct Edges {
     Edges() : from(nullptr), to(nullptr), weight(0) {}
     Edges(Nodes* f, Nodes* t, int w) : from(f), to(t), weight(w) {}
 };
+struct VehiclesNode{
+    string ID;
+    Nodes * Start;
+    Nodes * End;
 
+    VehiclesNode():Start(NULL),End(NULL),ID(""){}
+    VehiclesNode(string id, Nodes * S, Nodes * E):ID(id), Start(S), End(E){}
+
+};
 // Graph class
 class Graph {
 private:
@@ -32,7 +40,6 @@ private:
     int numEdges;  
     int nodeCapacity;      // Capacity for nodes array
     int edgeCapacity;      // Capacity for edges array
-
     void resizeNodes() {
         // Double the capacity when the array is full
         nodeCapacity *= 2;
@@ -276,60 +283,58 @@ public:
 }
 
 
-void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
-    // Find and remove the edge from the graph
-    int i = 0;
-    while (i < numEdges) {
-        if (streets[i].from->name == fromNode && streets[i].to->name == toNode && streets[i].weight == weight) {
-            // Shift elements to remove the edge
-            for (int j = i; j < numEdges - 1; j++) {
-                streets[j] = streets[j + 1];
+    void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
+        bool edgeDeleted = false; // Track if at least one edge was deleted
+        int i = 0;
+        while (i < numEdges) {
+            if (streets[i].from->name == fromNode && streets[i].to->name == toNode && streets[i].weight == weight) {
+                // Shift elements to remove the edge
+                for (int j = i; j < numEdges - 1; j++) {
+                    streets[j] = streets[j + 1];
+                }
+                numEdges--;
+                edgeDeleted = true; // Mark that we deleted the edge
+                cout << "Edge " << fromNode << " -> " << toNode << " (Weight: " << weight << ") has been deleted from the graph." << endl;
+                // Do not increment `i`, reevaluate the same index
+            } else {
+                i++; // Increment only if no deletion occurred
             }
-            numEdges--;
-            cout << "Edge " << fromNode << " -> " << toNode << " (Weight: " << weight << ") has been deleted from the graph." << endl;
-            break;
-        } else {
-            i++;
         }
+
+        if (!edgeDeleted) {
+            cout << "No edge found between " << fromNode << " and " << toNode << " with weight " << weight << "." << endl;
+        }
+
+        // Update the edge file
+        updateEdgeFile(fromNode);
     }
 
-    // Update the edge file
-    updateEdgeFile(fromNode);
-}
 
     void updateEdgeFile(const string& nodeName) {
         ifstream infile("road_network.csv");
         ofstream outfile("temp.csv");
 
-        string from, to;
+        string from, to, header;
         int weight;
 
-        bool headerRead = false;
-        
-        while (infile.good()) {
-             if (!headerRead) {
-                string header;
-                getline(infile, header);  // Read the header and write it to the temp file.
-                outfile << header << endl;
-                headerRead = true;
-            }
-            // Read the edge data (from node, to node, weight)
-            getline(infile, from, ',');
+        // Copy the header to the temp file
+        if (getline(infile, header)) {
+            outfile << header << endl;
+        }
+
+        // Process the remaining lines
+        while (getline(infile, from, ',')) {
             getline(infile, to, ',');
             infile >> weight;
-            infile.ignore(__LONG_MAX__, '\n');  // Skip the rest of the line.
+            infile.ignore(__LONG_MAX__, '\n'); // Skip to the next line
 
-            // Skip edges that involve the deleted node (either as 'from' or 'to')
-            if (from == nodeName ) {
-                getline(infile, to, ',');
-                infile >> weight;
-                continue;  // Skip the current edge and move to the next one
-            }else if(to == nodeName) {
-                infile >> weight;
+            // Skip edges involving the deleted node
+            if (from == nodeName || to == nodeName) {
+                continue;
             }
-            else {
-                outfile << from << "," << to << "," << weight << endl;  // Write the edge to the temp file
-            }
+
+            // Write valid edges to the temp file
+            outfile << from << "," << to << "," << weight << endl;
         }
 
         infile.close();
@@ -376,45 +381,45 @@ void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
         remove("traffic_signal_timings.csv");
         rename("temp.csv", "traffic_signal_timings.csv");
     }
-    // Dijkstra's Algorithm Implementation
-    void dijkstra(const string& startNodeName) {
-        int INF = 999999;  // A large number to represent infinity
-        int* dist = new int[numNodes];  // Array to store the distance from the start node
-        int* prev = new int[numNodes];  // Array to store the predecessor of each node
-        bool* visited = new bool[numNodes];  // Array to mark if a node has been visited
+    Nodes** dijkstra(const string& fromNodeName, const string& toNodeName, int& pathLength) {
+        const int INF = 999999; // A large value to represent infinity
+        int* dist = new int[numNodes]; // Distance from the start node
+        bool* visited = new bool[numNodes]; // Visited status for each node
+        int* predecessor = new int[numNodes]; // To reconstruct the path
 
-        // Initialize all distances to infinity and visited to false
+        // Initialize arrays
         for (int i = 0; i < numNodes; i++) {
             dist[i] = INF;
-            prev[i] = -1;
             visited[i] = false;
+            predecessor[i] = -1;
         }
 
-        // Find the start node index
-        int startIdx = -1;
+        // Find indices for the start and end nodes
+        int startIdx = -1, endIdx = -1;
         for (int i = 0; i < numNodes; i++) {
-            if (intersections[i].name == startNodeName) {
+            if (intersections[i].name == fromNodeName) {
                 startIdx = i;
-                break;
+            }
+            if (intersections[i].name == toNodeName) {
+                endIdx = i;
             }
         }
 
-        if (startIdx == -1) {
-            cout << "Start node not found!" << endl;
+        // If either node is not found, clean up and return
+        if (startIdx == -1 || endIdx == -1) {
             delete[] dist;
-            delete[] prev;
             delete[] visited;
-            return;
+            delete[] predecessor;
+            pathLength = 0;
+            return nullptr;
         }
 
-        // Set the distance to the start node as 0
-        dist[startIdx] = 0;
+        dist[startIdx] = 0; // Distance to the start node is 0
 
-        // Main loop of Dijkstra's Algorithm
+        // Main loop of Dijkstra's algorithm
         for (int i = 0; i < numNodes; i++) {
             // Find the unvisited node with the smallest distance
-            int minDist = INF;
-            int u = -1;
+            int u = -1, minDist = INF;
             for (int j = 0; j < numNodes; j++) {
                 if (!visited[j] && dist[j] < minDist) {
                     minDist = dist[j];
@@ -422,47 +427,178 @@ void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
                 }
             }
 
-            if (u == -1) break;  // All nodes are visited or no reachable nodes left
+            if (u == -1) break; // No reachable nodes left
 
-            // Mark the node as visited
-            visited[u] = true;
+            visited[u] = true; // Mark the node as visited
 
-            // Update the distances to the neighboring nodes
+            // Update distances to neighboring nodes
             for (int j = 0; j < numEdges; j++) {
                 if (streets[j].from == &intersections[u]) {
                     int v = -1;
                     for (int k = 0; k < numNodes; k++) {
-                        if (intersections[k].name == streets[j].to->name) {
+                        if (streets[j].to == &intersections[k]) {
                             v = k;
                             break;
                         }
                     }
-                    if (v != -1 && dist[u] + streets[j].weight < dist[v]) {
+
+                    if (v != -1 && !visited[v] && dist[u] + streets[j].weight < dist[v]) {
                         dist[v] = dist[u] + streets[j].weight;
-                        prev[v] = u;
+                        predecessor[v] = u; // Update predecessor
                     }
                 }
             }
         }
 
-        // Output the shortest distances and paths
-        for (int i = 0; i < numNodes; i++) {
-            cout << "Distance from " << startNodeName << " to " << intersections[i].name << ": ";
-            if (dist[i] == INF) {
-                cout << "Unreachable" << endl;
-            } else {
-                cout << dist[i] << endl;
-            }
+        // Reconstruct the path
+        if (dist[endIdx] == INF) {
+            // No path found
+            delete[] dist;
+            delete[] visited;
+            delete[] predecessor;
+            pathLength = 0;
+            return nullptr;
+        }
+
+        // Backtrack to find the path
+        int tempPathLength = 0;
+        int currIdx = endIdx;
+        while (currIdx != -1) {
+            tempPathLength++;
+            currIdx = predecessor[currIdx];
+        }
+
+        Nodes** path = new Nodes*[tempPathLength];
+        currIdx = endIdx;
+        for (int i = tempPathLength - 1; i >= 0; i--) {
+            path[i] = &intersections[currIdx];
+            currIdx = predecessor[currIdx];
         }
 
         // Clean up
         delete[] dist;
-        delete[] prev;
         delete[] visited;
+        delete[] predecessor;
+
+        pathLength = tempPathLength;
+        return path;
     }
 
 };
 
+class Vehicles:public Graph{
+private:
+    VehiclesNode * vehicle;
+    int capacity;
+    int numVehicles;
+
+    void IncreaseNumVehicles(){
+        VehiclesNode * NVehicles = new VehiclesNode[capacity + 5];
+        int i = 0;
+        while(i < capacity){
+            NVehicles[i] = vehicle[i];
+            i++;
+        }
+
+        capacity += 5;
+        delete[] vehicle;
+        vehicle = NVehicles;
+    }
+
+public:
+    Vehicles(){
+        numVehicles = 0;
+        capacity = 10;
+        vehicle = new VehiclesNode[capacity];
+
+    }
+
+    ~Vehicles(){
+        delete[] vehicle;
+    }
+
+    void createVehicles(const string name, string from_node , string to_node){
+        Nodes * Start = findNode(from_node);
+        Nodes * End = findNode(to_node);
+        if ( Start != nullptr && End != nullptr){
+            VehiclesNode NewVehicle;
+            NewVehicle.ID= name;
+            NewVehicle.Start= Start;
+            NewVehicle.End = End;
+            vehicle[numVehicles] = NewVehicle;
+            numVehicles++;
+            
+        }else{
+            cout<<"One or both Nodes not found!"<<endl;
+        }
+        
+    }
+
+    void Input_Vehicle(){
+        string id, Start, End;
+        while(true){
+            if(numVehicles == capacity){
+                IncreaseNumVehicles();
+            }
+
+            cout<<"Enter Vehcile ID , Start Intersection and End Intersection : ";
+            cin >> id >> Start >> End;
+            createVehicles(id,Start,End);
+
+
+    }
+    }
+    void calcaulate_route() {
+        int distance;
+        for (int i = 0; i < numVehicles; i++) {
+            cout << "Vehicle with id " << vehicle[i].ID << endl;
+
+            // Call Dijkstra's algorithm
+            Nodes** path = Graph::dijkstra(vehicle[i].Start->name, vehicle[i].End->name, distance);
+
+            if (path == nullptr) {
+                cout << "Node is Unreachable" << endl;
+            } else {
+                cout << "Path: ";
+                int j = 0;
+                while (path[j] != nullptr) { // Ensure path[j] is valid
+                    cout << path[j]->name;
+                    j++;
+                    if (path[j] != nullptr) {
+                        cout << " -> ";
+                    }
+                }
+                cout << endl;
+                cout << "Shortest Distance: " << distance << endl;
+                cout << endl;
+
+                // Free dynamically allocated path array
+                delete[] path;
+            }
+        }
+    }
+
+  void vehicles_csv(){
+        ifstream file("vehicles.csv");
+        string header;
+        file >> header;
+        string id, start, end;
+        while(file.good()){
+            getline(file, id,',');
+            getline(file, start,',');
+            file >> end;
+            file.ignore(__LONG_MAX__,'\n');
+            if (!start.empty() && !end.empty() && !id.empty()){ 
+                createVehicles(id, start, end); 
+            }
+        }
+        file.close();
+    }
+    
+
+
+
+};
 // Main function with interactive menu
 int main() {
     Graph graph;
@@ -519,11 +655,37 @@ int main() {
             case 6: {
                 // Running Dijkstra's Algorithm
                 string startNode;
+                string endNode;
                 cout << "Enter the start node: ";
                 cin >> startNode;
-                graph.dijkstra(startNode);
+                cout << "Enter the end node: ";
+                cin >> endNode;
+                int distance;
+
+                // Assuming `graph.dijkstra` returns a dynamically allocated array of pointers to Nodes
+                Nodes** path = graph.dijkstra(startNode, endNode, distance);
+
+                if (path == nullptr) {
+                    cout << "Path is Unreachable!" << endl;
+                } else {
+                    int i = 0;
+                    cout << "Path: ";
+                    while (path[i] != nullptr) { // Check if the pointer is valid
+                        cout << path[i]->name;
+                        i++;
+                        if (path[i] != nullptr) {
+                            cout << " -> ";
+                        }
+                    }
+                    cout << endl;
+                    cout << "Distance: " << distance << endl << endl;
+
+                    // Free dynamically allocated path array after use
+                    delete[] path;
+                }
                 break;
             }
+
             case 7:
                 cout << "Exiting the program." << endl;
                 running = false;  // Exit the loop
@@ -535,3 +697,4 @@ int main() {
 
     return 0;
 }
+
