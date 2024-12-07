@@ -376,9 +376,90 @@ void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
         remove("traffic_signal_timings.csv");
         rename("temp.csv", "traffic_signal_timings.csv");
     }
+    // Dijkstra's Algorithm Implementation
+    void dijkstra(const string& startNodeName) {
+        int INF = 999999;  // A large number to represent infinity
+        int* dist = new int[numNodes];  // Array to store the distance from the start node
+        int* prev = new int[numNodes];  // Array to store the predecessor of each node
+        bool* visited = new bool[numNodes];  // Array to mark if a node has been visited
 
+        // Initialize all distances to infinity and visited to false
+        for (int i = 0; i < numNodes; i++) {
+            dist[i] = INF;
+            prev[i] = -1;
+            visited[i] = false;
+        }
 
+        // Find the start node index
+        int startIdx = -1;
+        for (int i = 0; i < numNodes; i++) {
+            if (intersections[i].name == startNodeName) {
+                startIdx = i;
+                break;
+            }
+        }
 
+        if (startIdx == -1) {
+            cout << "Start node not found!" << endl;
+            delete[] dist;
+            delete[] prev;
+            delete[] visited;
+            return;
+        }
+
+        // Set the distance to the start node as 0
+        dist[startIdx] = 0;
+
+        // Main loop of Dijkstra's Algorithm
+        for (int i = 0; i < numNodes; i++) {
+            // Find the unvisited node with the smallest distance
+            int minDist = INF;
+            int u = -1;
+            for (int j = 0; j < numNodes; j++) {
+                if (!visited[j] && dist[j] < minDist) {
+                    minDist = dist[j];
+                    u = j;
+                }
+            }
+
+            if (u == -1) break;  // All nodes are visited or no reachable nodes left
+
+            // Mark the node as visited
+            visited[u] = true;
+
+            // Update the distances to the neighboring nodes
+            for (int j = 0; j < numEdges; j++) {
+                if (streets[j].from == &intersections[u]) {
+                    int v = -1;
+                    for (int k = 0; k < numNodes; k++) {
+                        if (intersections[k].name == streets[j].to->name) {
+                            v = k;
+                            break;
+                        }
+                    }
+                    if (v != -1 && dist[u] + streets[j].weight < dist[v]) {
+                        dist[v] = dist[u] + streets[j].weight;
+                        prev[v] = u;
+                    }
+                }
+            }
+        }
+
+        // Output the shortest distances and paths
+        for (int i = 0; i < numNodes; i++) {
+            cout << "Distance from " << startNodeName << " to " << intersections[i].name << ": ";
+            if (dist[i] == INF) {
+                cout << "Unreachable" << endl;
+            } else {
+                cout << dist[i] << endl;
+            }
+        }
+
+        // Clean up
+        delete[] dist;
+        delete[] prev;
+        delete[] visited;
+    }
 
 };
 
@@ -386,17 +467,20 @@ void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
 int main() {
     Graph graph;
     bool running = true;
-    cout<<"Reading File Data..."<<endl;
-    graph.traffic_signal_timings();
+    cout << "Reading File Data..." << endl;
+    graph.traffic_signal_timings();  // Assuming these are to load data
     graph.road_Network();
-    cout<<"File read successfully"<<endl;
+    cout << "File read successfully" << endl;
+
     while (running) {
         cout << "\n=== Graph Menu ===" << endl;
         cout << "1. Add Nodes" << endl;
         cout << "2. Add Edges" << endl;
         cout << "3. Display Graph" << endl;
         cout << "4. Delete Node" << endl;
-        cout << "5. Exit" << endl;
+        cout << "5. Delete Edge" << endl;
+        cout << "6. Dijkstra's Algorithm" << endl;
+        cout << "7. Exit" << endl;  // Fixed: Changed this to "7" for Exit
         cout << "Choose an option: ";
         int choice;
         cin >> choice;
@@ -412,15 +496,37 @@ int main() {
                 graph.displayGraph();
                 break;
             case 4: {
+                // Code to delete a node
                 cout << "Enter the name of the node to delete: ";
                 string nodeName;
                 cin >> nodeName;
                 graph.DeleteNode(nodeName);
                 break;
             }
-            case 5:
-                running = false;
-                cout << "Exiting..." << endl;
+            case 5: {
+                // Code to delete an edge
+                string from, to;
+                int weight;
+                cout << "Enter the name of the From node: ";
+                cin >> from;
+                cout << "Enter the name of the To node: ";
+                cin >> to;
+                cout << "Enter the weight of the edge: ";
+                cin >> weight;
+                graph.DeleteEdge(from, to, weight);
+                break;
+            }
+            case 6: {
+                // Running Dijkstra's Algorithm
+                string startNode;
+                cout << "Enter the start node: ";
+                cin >> startNode;
+                graph.dijkstra(startNode);
+                break;
+            }
+            case 7:
+                cout << "Exiting the program." << endl;
+                running = false;  // Exit the loop
                 break;
             default:
                 cout << "Invalid choice! Please try again." << endl;
