@@ -1,3 +1,8 @@
 VehicleID,StartIntersection,EndIntersection,PriorityLevel
 EV1,A,D,High
 EV2,B,E,High
+EV3,F,K,High
+EV4,C,L,High
+EV5,G,Q,High
+EV6,I,W,High
+EV7,M,Z,High
