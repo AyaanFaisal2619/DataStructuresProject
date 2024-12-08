@@ -2,166 +2,160 @@
 #include <string>
 #include <cstring>
 #include <fstream>
-#include <chrono>   // For timing simulation
-#include <thread>   // For sleep_for
-#include <ctime>
+#include <chrono>   
+#include <thread>   // For Running multiple traffic simulations at a time
+#include <ctime>    // To handle time in simulations
+
 using namespace std;
 
-// Structure for Nodes (Intersections)
 struct Nodes {
-    string name;  // Name of the intersection
-    int timing;
-    
-    Nodes() : name(""), timing(0) {}
-    Nodes(string n, int t) : name(n), timing(t) {}
+    string name; // Intersection name
+    int timing;  // Green light timing
+
+    Nodes() : name(""), timing(0) {} 
+    Nodes(string n, int t) : name(n), timing(t) {} 
 };
 
-// Structure for Edges (Streets)
 struct Edges {
-    Nodes* from;  // Pointer to the starting node
-    Nodes* to;    // Pointer to the ending node
-    int weight;   // Weight of the edge (e.g., distance or time)
-    int capacity; 
-    bool isActive; // Indicates if the edge is active
+    Nodes* from; // Starting point of the road
+    Nodes* to;   // Ending point of the road
+    int weight;  // Weight or time for the road
+    int capacity; // Max limit for vehicles
+    bool isActive; // If the road is operational
 
-    Edges() : from(nullptr), to(nullptr), weight(0), capacity(3), isActive(true) {}
-    Edges(Nodes* f, Nodes* t, int w) : from(f), to(t), weight(w), capacity(3), isActive(true) {}
+    Edges() : from(nullptr), to(nullptr), weight(0), capacity(3), isActive(true) {} // Default constructor
+    Edges(Nodes* f, Nodes* t, int w) : from(f), to(t), weight(w), capacity(3), isActive(true) {} // Constructor with values
 };
 
 struct VehiclesNode {
-    string ID;
-    Edges * edge;
-    string priorityLevel;  
-    VehiclesNode() : edge(NULL), ID("") {}
-    VehiclesNode(string id, Edges * e, string p) : ID(id), edge(e), priorityLevel(p) {}
+    string ID; // Vehicle ID
+    Edges* edge; // The road it is on
+    string priorityLevel; // Vehicles Priority e.g Ambulance might have a higher priority
+
+    VehiclesNode() : edge(NULL), ID("") {} 
+    VehiclesNode(string id, Edges* e, string p) : ID(id), edge(e), priorityLevel(p) {} 
 };
 
-// Graph class
 class Graph {
 private:
-    Nodes* intersections;  // Array of intersections (nodes)
-    Edges* streets;        // Array of streets (edges)
-    int numNodes;          // Number of nodes
-    int numEdges;  
-    int nodeCapacity;      // Capacity for nodes array
-    int edgeCapacity;      // Capacity for edges array
-    int* vehicleCounts;
+    Nodes* intersections; // Array of intersections
+    Edges* streets; // Array of roads, for example if from has A and To has D than the street will be from A to D
+    int numNodes; // Current number of intersections
+    int numEdges; // Current number of roads
+    int nodeCapacity; // Maximum number of intersections
+    int edgeCapacity; // Maximum number of roads
+    int* vehicleCounts; // Number of vehicles per road
 
-    void resizeNodes() {
-        nodeCapacity *= 2;
-        Nodes* temp = new Nodes[nodeCapacity];
-        for (int i = 0; i < numNodes; i++) {
-            temp[i] = intersections[i];
-        }
-        delete[] intersections;
-        intersections = temp;
+    void resizeNodes() {   // increasing capacity of intersection
+        nodeCapacity *= 2; 
+        Nodes* temp = new Nodes[nodeCapacity]; // Create a new larger array
+        for (int i = 0; i < numNodes; i++) temp[i] = intersections[i]; 
+        delete[] intersections; // Free old memory
+        intersections = temp; // Update to new array
     }
 
-    void resizeEdges() {
-        edgeCapacity *= 2;
-        Edges* temp = new Edges[edgeCapacity];
-        for (int i = 0; i < numEdges; i++) {
-            temp[i] = streets[i];
-        }
+    void resizeEdges() { // Increase capacity of roads array
+        edgeCapacity *= 2; 
+        Edges* temp = new Edges[edgeCapacity]; 
+        for (int i = 0; i < numEdges; i++) temp[i] = streets[i];
         delete[] streets;
-        streets = temp;
+        streets = temp; 
     }
 
 public:
     Graph() : intersections(nullptr), streets(nullptr), numNodes(0), numEdges(0), nodeCapacity(10), edgeCapacity(10), vehicleCounts(nullptr) {
-        intersections = new Nodes[nodeCapacity];
-        streets = new Edges[edgeCapacity];
-        vehicleCounts = new int[edgeCapacity];
+        intersections = new Nodes[nodeCapacity]; // Initialize intersections with initial capacity of 10
+        streets = new Edges[edgeCapacity]; // Initialize roads....
+        vehicleCounts = new int[edgeCapacity]; // Initialize vehicle counts...
     }
 
-    int getnumEdges() {
-        return numEdges; 
+    ~Graph() { // For memory release
+        delete[] intersections; // Free intersections array
+        delete[] streets; // Free roads array
+        delete[] vehicleCounts; // Free vehicle counts
+    }
+     int getnumEdges() {
+    return numEdges;  // Just returning the number of edges here.
     }
 
     Edges getStreets(int i) {
-        return streets[i];          
-    }
-
-    ~Graph() {
-        delete[] intersections;
-        delete[] streets;
-        delete[] vehicleCounts;
+        return streets[i];  // Returning the street of required index
     }
 
     Nodes* findNode(const string& name) {
-        for (int i = 0; i < numNodes; i++) {
+        for (int i = 0; i < numNodes; i++) {  // looooping through all nodes to find desired one
             if (intersections[i].name == name) {
-                return &intersections[i];
+                  return &intersections[i]; 
             }
         }
-        return nullptr;
+    return nullptr;  // If not found
     }
 
     int findEdgeIndex(const string& fromName, const string& toName) {
-        for (int i = 0; i < numEdges; i++) {
-            if (streets[i].from->name == fromName && streets[i].to->name == toName) {
-                return i;
+            for (int i = 0; i < numEdges; i++) {  // Searching for the edge with the matching 'from' and 'to' names.
+                if (streets[i].from->name == fromName && streets[i].to->name == toName) {
+                    return i;  
+                }
             }
-        }
-        return -1;
+    return -1;  // if not found.
     }
 
     void incrementVehicleCount(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);
-        if (index != -1) {
-            vehicleCounts[index]++;
+            int index = findEdgeIndex(fromName, toName);  // First, find the index of the edge.
+            if (index != -1) {
+                vehicleCounts[index]++;  // If the edge exists, increment the vehicle count.
+            }
         }
-    }
 
     void decrementVehicleCount(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);
+        int index = findEdgeIndex(fromName, toName);  // Find the index of the edge.
         if (index != -1 && vehicleCounts[index] > 0) {
-            vehicleCounts[index]--;
+            vehicleCounts[index]--;  // Decrease the vehicle count if it's above 0.
         }
     }
 
     bool isCongested(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);
+        int index = findEdgeIndex(fromName, toName);  // again finding edge's index first.
         if (index != -1) {
-            return vehicleCounts[index] >= streets[index].capacity;
+            return vehicleCounts[index] >= streets[index].capacity;  // Return true if the vehicles are more than or equal to capacity.
         }
-        return false;
+        return false;  // otherwise false
     }
 
     int findNodeIndex(const string& name) {
-        for (int i = 0; i < numNodes; i++) {
+        for (int i = 0; i < numNodes; i++) {  // Searching through nodes by name.
             if (intersections[i].name == name) {
-                return i;
+                 return i;  // Return the index if found.
             }
         }
-        return -1;
+        return -1;  // if not found.
     }
 
     Nodes** bfs(const string& startName, const string& endName) {
         const int MAX_NODES = 100;
         Nodes* queue[MAX_NODES];
         Nodes* parent[MAX_NODES];
-        bool visited[MAX_NODES] = {false};
-        int front = 0, rear = 0;
+        bool visited[MAX_NODES] = {false};  // Array to track nodes that were already visited.
+        int front = 0, rear = 0;  // Queue pointers for BFS.
 
-        Nodes* startNode = findNode(startName);
-        Nodes* endNode = findNode(endName);
+        Nodes* startNode = findNode(startName);  // Find the starting node.
+        Nodes* endNode = findNode(endName);  // Find the destination node.
         if (startNode == nullptr || endNode == nullptr) {
-            return nullptr;
+            return nullptr;  // If either node is not found, return null.
         }
 
         int startIndex = findNodeIndex(startName);
         int endIndex = findNodeIndex(endName);
 
-        queue[rear++] = startNode;
-        visited[startIndex] = true;
+        queue[rear++] = startNode;  // Add the start node to the queue.
+        visited[startIndex] = true;  // Mark the start node as visited.
         parent[startIndex] = nullptr;
 
-        while (front != rear) {
-            Nodes* current = queue[front++];
-            int currentIndex = findNodeIndex(current->name);
+        while (front != rear) {  // Standard BFS loop.
+        Nodes* current = queue[front++];  // Dequeue the next node.
+        int currentIndex = findNodeIndex(current->name);
 
-            if (current == endNode) {
+        if (current == endNode) {  // If we've reached the destination, build the path.
                 int pathLength = 0;
                 Nodes* path[MAX_NODES];
                 Nodes* node = endNode;
@@ -171,36 +165,36 @@ public:
                 }
                 Nodes** result = new Nodes*[pathLength + 1];
                 for (int i = 0; i < pathLength; i++) {
-                    result[i] = path[pathLength - 1 - i];
+                    result[i] = path[pathLength - 1 - i];  // Reverse the path to get the correct order.
                 }
-                result[pathLength] = nullptr;
+                result[pathLength] = nullptr;  // Null-terminate the result.
                 return result;
             }
 
-            for (int i = 0; i < numEdges; i++) {
+        for (int i = 0; i < numEdges; i++) {  // Loop through all edges to find unvisited neighbors.
                 if (streets[i].from == current && streets[i].isActive && !visited[findNodeIndex(streets[i].to->name)]) {
                     Nodes* neighbor = streets[i].to;
                     int neighborIndex = findNodeIndex(neighbor->name);
-                    queue[rear++] = neighbor;
-                    visited[neighborIndex] = true;
-                    parent[neighborIndex] = current;
+                    queue[rear++] = neighbor;  // Enqueue the neighbor.
+                    visited[neighborIndex] = true;  // Mark as visited.
+                    parent[neighborIndex] = current;  // Set the parent node.
                 }
             }
         }
-        return nullptr;
+        return nullptr;  // Return null if no path is found.
     }
 
     void createNode(const string& name, int timings) {
-        if (findNode(name) != nullptr) {
+        if (findNode(name) != nullptr) {  // Check if the node already exists.
             cout << "Node with the name '" << name << "' already exists!" << endl;
             return;
-        }
+        }   
 
-        if (numNodes == nodeCapacity) {
+        if (numNodes == nodeCapacity) {  // Resize the array if needed.
             resizeNodes();
         }
 
-        intersections[numNodes++] = Nodes(name, timings);
+        intersections[numNodes++] = Nodes(name, timings);  // Add the new node.
         cout << "Node '" << name << "' has been added." << endl;
     }
 
@@ -208,22 +202,23 @@ public:
         Nodes* fromNode = findNode(from);
         Nodes* toNode = findNode(to);
 
-        if (fromNode && toNode) {
-            for (int i = 0; i < numEdges; i++) {
+        if (fromNode && toNode) {  // Check if both nodes exist.
+            for (int i = 0; i < numEdges; i++) {  // Check if the edge already exists.
                 if (streets[i].from == fromNode && streets[i].to == toNode) {
                     cout << "Edge from '" << from << "' to '" << to << "' already exists. Updating weight to " << weight << "." << endl;
-                    streets[i].weight = weight;
+                    streets[i].weight = weight;  // Update the weight if the edge is found.
                     return;
                 }
             }
 
-            if (numEdges == edgeCapacity) {
-                resizeEdges();
-            }
-            streets[numEdges++] = Edges(fromNode, toNode, weight);
-            cout << "Edge from '" << from << "' to '" << to << "' with weight " << weight << " has been added." << endl;
-        } else {
-            cout << "Error: One or both nodes not found!" << endl;
+        if (numEdges == edgeCapacity) {  // Resize if needed.
+            resizeEdges();
+        }
+        streets[numEdges++] = Edges(fromNode, toNode, weight);  // Add the new edge.
+        cout << "Edge from '" << from << "' to '" << to << "' with weight " << weight << " has been added." << endl;
+        }
+        else {
+        cout << "Error: One or both nodes not found!" << endl;
         }
     }
 
@@ -234,10 +229,10 @@ public:
         while (true) {
             cout << "Enter node name: ";
             cin >> name;
-            if (name == "-1") break;
+            if (name == "-1") break;  // Break if user types -1.
             cout << "Enter Green Time: ";
             cin >> timings;
-            createNode(name, timings);
+            createNode(name, timings);  // Create the node and store in the file.
             ofstream file("traffic_signal_timings.csv", std::ios::app);
             file << name << ',' << timings << endl; 
             file.close();
@@ -251,9 +246,9 @@ public:
         while (true) {
             cout << "Enter edge (from to weight): ";
             cin >> from;
-            if (from == "-1") break;
+            if (from == "-1") break;  // Stop if -1 is typed.
             cin >> to >> weight;
-            createEdges(from, to, weight);
+            createEdges(from, to, weight);  // Create the edge and store in the file.
             ofstream file("road_network.csv", std::ios::app);
             file << from << "," << to << "," << weight << endl; 
             file.close();
@@ -263,51 +258,55 @@ public:
     void displayGraph() {
         cout << "Nodes:" << endl;
         for (int i = 0; i < numNodes; i++) {
-            cout << i << ": " << intersections[i].name << endl;
+            cout << i << ": " << intersections[i].name << endl;  // Display each node.
         }
 
         cout << "Edges:" << endl;
         for (int i = 0; i < numEdges; i++) {
             cout << i << ": " << streets[i].from->name << " -> "
-                 << streets[i].to->name
-                 << " (Weight: " << streets[i].weight << ")" << endl;
+            << streets[i].to->name
+            << " (Weight: " << streets[i].weight << ")" << endl;  // Display each edge.
         }
     }
 
+
     void DeleteNode(const string& name) {
-        Nodes* node = findNode(name);
+        Nodes* node = findNode(name); // First, find the node
         if (node == nullptr) {
-            cout << "Node not found!" << endl;
+            cout << "Node not found!" << endl; // If node is not found, show error and return
             return;
         }
 
         int i = 0;
+        // Loop through all edges to remove the ones connected to this node
         while (i < numEdges) {
             if (streets[i].from == node || streets[i].to == node) {
                 for (int j = i; j < numEdges - 1; j++) {
-                    streets[j] = streets[j + 1];
+                    streets[j] = streets[j + 1]; // Shift edges to remove the deleted one
                 }
-                numEdges--;
+                numEdges--; // Reduce the edge count
             } else {
-                i++;
+                i++; // If no match, move to the next edge
             }
         }
 
         int nodeIndex = -1;
         for (int i = 0; i < numNodes; i++) {
             if (intersections[i].name == name) {
-                nodeIndex = i;
+                nodeIndex = i; // Get the index of the node to be deleted
                 break;
             }
         }
 
         if (nodeIndex != -1) {
+            // Shift nodes to fill the gap of the deleted node
             for (int i = nodeIndex; i < numNodes - 1; i++) {
                 intersections[i] = intersections[i + 1];
             }
-            numNodes--;
+            numNodes--; // Reduce the node count
         }
 
+        // Update the node and edge files after deletion
         updateNodeFile(name);
         updateEdgeFile(name);
         cout << "Node " << name << " and its associated edges have been deleted." << endl;
@@ -319,15 +318,15 @@ public:
         int timings;
         if (file1.good()) {
             string header;
-            getline(file1, header);
+            getline(file1, header); // Skip the header row
         }
         
         while (file1.good()) {
-            getline(file1, node, ',');
+            getline(file1, node, ','); // Read node name
             file1 >> timings;
-            file1.ignore(__LONG_MAX__, '\n');
+            file1.ignore(__LONG_MAX__, '\n'); // Move to the next line
             if (!node.empty()) {
-                createNode(node, timings);
+                createNode(node, timings); // Create node with the read data
             }
         }
     }
@@ -339,43 +338,45 @@ public:
 
         if (file.good()) {
             string header;
-            getline(file, header);
+            getline(file, header); // Skip the header row
         }
 
         while (file.good()) {
-            getline(file, from_node, ',');
-            getline(file, to_node, ',');
-            file >> weight;
-            file.ignore(__LONG_MAX__, '\n');
+            getline(file, from_node, ','); 
+            getline(file, to_node, ','); 
+            file >> weight; 
+            file.ignore(__LONG_MAX__, '\n'); // Move to the next line
             if (!from_node.empty() && !to_node.empty()) {
-                createEdges(from_node, to_node, weight);
+                createEdges(from_node, to_node, weight); // Create edge with the read data
             }
         }
         file.close();
     }
 
     Edges* findEdge(Nodes* from, Nodes* to) {
+        // Find the edge that connects two nodes
         for (int i = 0; i < numEdges; i++) {
             if (streets[i].from == from && streets[i].to == to) {
-                return &streets[i];
+                return &streets[i]; // Return the edge if found
             }
         }
-        return nullptr;
+        return nullptr; // if no edge is found
     }
 
     void DeleteEdge(const string& fromNode, const string& toNode, int weight) {
         bool edgeDeleted = false;
         int i = 0;
+        // Loop through edges to find the one that matches the 'from', 'to', and 'weight'
         while (i < numEdges) {
             if (streets[i].from->name == fromNode && streets[i].to->name == toNode && streets[i].weight == weight) {
                 for (int j = i; j < numEdges - 1; j++) {
-                    streets[j] = streets[j + 1];
+                    streets[j] = streets[j + 1]; // Shift edges to remove the one being deleted
                 }
-                numEdges--;
+                numEdges--; // Reduce edge count
                 edgeDeleted = true;
                 cout << "Edge " << fromNode << " -> " << toNode << " (Weight: " << weight << ") has been deleted from the graph." << endl;
             } else {
-                i++;
+                i++; // Move to the next edge if no match
             }
         }
 
@@ -383,7 +384,7 @@ public:
             cout << "No edge found between " << fromNode << " and " << toNode << " with weight " << weight << "." << endl;
         }
 
-        updateEdgeFile(fromNode);
+        updateEdgeFile(fromNode); // Update the edge file after deletion
     }
 
     void updateEdgeFile(const string& nodeName) {
@@ -394,26 +395,27 @@ public:
         int weight;
 
         if (getline(infile, header)) {
-            outfile << header << endl;
+            outfile << header << endl; // Copy the header to the temp file
         }
 
+        // Copy all edges except the ones related to 'nodeName'
         while (getline(infile, from, ',')) {
             getline(infile, to, ',');
             infile >> weight;
             infile.ignore(__LONG_MAX__, '\n');
 
             if (from == nodeName || to == nodeName) {
-                continue;
+                continue; // Skip if it's the edge to delete
             }
 
-            outfile << from << "," << to << "," << weight << endl;
+            outfile << from << "," << to << "," << weight << endl; // Write the valid edge to the temp file
         }
 
         infile.close();
         outfile.close();
 
-        remove("road_network.csv");
-        rename("temp.csv", "road_network.csv");
+        remove("road_network.csv"); // Delete old file
+        rename("temp.csv", "road_network.csv"); // Rename temp file to original file name
     }
 
     void updateNodeFile(const string& nodeName) {
@@ -429,42 +431,43 @@ public:
             if (!headerRead) {
                 string header;
                 getline(infile, header);
-                outfile << header << endl;
+                outfile << header << endl; // Write the header to the temp file
                 headerRead = true;
             }
             
-            getline(infile, node, ',');
-            if (node.empty()) continue;
+            getline(infile, node, ','); // Read node name
+            if (node.empty()) continue; // Skip if node is empty
             
-            infile >> timings;
-            infile.ignore(__LONG_MAX__, '\n');
+            infile >> timings; // Read timings
+            infile.ignore(__LONG_MAX__, '\n'); // Move to the next line
 
             if (node != nodeName) {
-                outfile << node << "," << timings << endl;
+                outfile << node << "," << timings << endl; // Write the valid node to the temp file
             }
         }
 
         infile.close();
         outfile.close();
 
-        remove("traffic_signal_timings.csv");
-        rename("temp.csv", "traffic_signal_timings.csv");
+        remove("traffic_signal_timings.csv"); // Delete old file
+        rename("temp.csv", "traffic_signal_timings.csv"); // Rename temp file to original file name
     }
 
     Nodes** dijkstra(const string& fromNodeName, const string& toNodeName, int& pathLength) {
-        const int INF = 999999;
-        int* dist = new int[numNodes];
-        bool* visited = new bool[numNodes];
-        int* predecessor = new int[numNodes];
+        const int INF = 999999; // Use a big number to represent infinity
+        int* dist = new int[numNodes]; // Distance array for shortest paths
+        bool* visited = new bool[numNodes]; // Track visited nodes
+        int* predecessor = new int[numNodes]; // To store the previous node in the path
 
+        // Initialize arrays with default values
         for (int i = 0; i < numNodes; i++) {
-            dist[i] = INF;
-            visited[i] = false;
-            predecessor[i] = -1;
+            dist[i] = INF; // Set all distances to infinity
+            visited[i] = false; // Mark all nodes as unvisited
+            predecessor[i] = -1; // No predecessors yet
         }
 
-        int startIdx = -1, endIdx = -1;
-        for (int i = 0; i < numNodes; i++) {
+        int startIdx = -1, endIdx = -1; 
+        for (int i = 0; i < numNodes; i++) {    // Find the index of the start and end nodes
             if (intersections[i].name == fromNodeName) {
                 startIdx = i;
             }
@@ -473,6 +476,7 @@ public:
             }
         }
 
+        // If start or end node is not found, free memory and return null
         if (startIdx == -1 || endIdx == -1) {
             delete[] dist;
             delete[] visited;
@@ -481,10 +485,12 @@ public:
             return nullptr;
         }
 
-        dist[startIdx] = 0;
+        dist[startIdx] = 0; // Distance to the start node is 0
 
+        // Start the Dijkstra's algorithm
         for (int i = 0; i < numNodes; i++) {
             int u = -1, minDist = INF;
+            // Find the unvisited node with the smallest distance
             for (int j = 0; j < numNodes; j++) {
                 if (!visited[j] && dist[j] < minDist) {
                     minDist = dist[j];
@@ -492,13 +498,15 @@ public:
                 }
             }
 
-            if (u == -1) break;
+            if (u == -1) break; // If no such node, exit
 
-            visited[u] = true;
+            visited[u] = true; // Mark this node as visited
 
+            // Update distances for neighboring nodes
             for (int j = 0; j < numEdges; j++) {
                 if (streets[j].from == &intersections[u] && streets[j].isActive) {
                     int v = -1;
+                    // Find the neighboring node index
                     for (int k = 0; k < numNodes; k++) {
                         if (streets[j].to == &intersections[k]) {
                             v = k;
@@ -506,14 +514,16 @@ public:
                         }
                     }
 
+                    // Relaxation step: update the distance if a shorter path is found
                     if (v != -1 && !visited[v] && dist[u] + streets[j].weight < dist[v]) {
                         dist[v] = dist[u] + streets[j].weight;
-                        predecessor[v] = u;
+                        predecessor[v] = u; // Update predecessor for path tracking
                     }
                 }
             }
         }
 
+        // If the destination node is not reachable
         if (dist[endIdx] == INF) {
             delete[] dist;
             delete[] visited;
@@ -522,8 +532,9 @@ public:
             return nullptr;
         }
 
-        pathLength = dist[endIdx];
+        pathLength = dist[endIdx]; // Set the shortest path length
 
+        // Calculate the path length by backtracking from the destination
         int tempPathLength = 0;
         int currIdx = endIdx;
         while (currIdx != -1) {
@@ -531,58 +542,62 @@ public:
             currIdx = predecessor[currIdx];
         }
 
+        // Create a path array and backtrack to fill it
         Nodes** path = new Nodes*[tempPathLength + 1];
         currIdx = endIdx;
         for (int i = tempPathLength - 1; i >= 0; i--) {
-            path[i] = &intersections[currIdx];
-            currIdx = predecessor[currIdx];
+            path[i] = &intersections[currIdx]; // Add node to path
+            currIdx = predecessor[currIdx]; // Move to the previous node
         }
-        path[tempPathLength] = nullptr;
+        path[tempPathLength] = nullptr; // Null-terminate the path
 
+        // Free memory
         delete[] dist;
         delete[] visited;
         delete[] predecessor;
 
-        return path;
+        return path; // Return the shortest path
     }
 
     void displayCongestion() {
+        // Loop through each road and display the vehicle count
         for (int i = 0; i < numEdges; i++) {
             cout << "Road " << streets[i].from->name << "-" << streets[i].to->name << ": "
                  << vehicleCounts[i] << " vehicles";
+            // Check if the road is congested
             if (isCongested(streets[i].from->name, streets[i].to->name)) {
-                cout << " (Congested)";
+                cout << " (Congested)"; // Mark as congested if true
             }
             cout << endl;
         }
     }
 
     void blockRoad(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);
+        int index = findEdgeIndex(fromName, toName); // Find the index of the start and end nodes
         if (index != -1) {
-            streets[index].isActive = false;
+            streets[index].isActive = false; // Set road as inactive
             cout << "Road from " << fromName << " to " << toName << " has been closed." << endl;
         } else {
-            cout << "Edge not found." << endl;
+            cout << "Edge not found." << endl; // If no such road, show error
         }
     }
 
     void reopenRoad(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);
+        int index = findEdgeIndex(fromName, toName); // Find the index of the road to reopen
         if (index != -1) {
-            streets[index].isActive = true;
+            streets[index].isActive = true; // Set road as active
             cout << "Road from " << fromName << " to " << toName << " has been reopened." << endl;
         } else {
-            cout << "Edge not found." << endl;
+            cout << "Edge not found." << endl; // If no such road, show error
         }
     }
 
     bool isEdgeActive(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);
+        int index = findEdgeIndex(fromName, toName);  // Find the index of the road to reopen
         if (index != -1) {
-            return streets[index].isActive;
+            return streets[index].isActive; // Return true if the road is active
         }
-        return false;
+        return false; // Return false if no such road is found.
     }
 };
 
@@ -592,9 +607,9 @@ private:
     int capacity;
     int numVehicles;
 
-    void IncreaseNumVehicles() {
-        VehiclesNode *NVehicles = new VehiclesNode[capacity + 5];
-        int i = 0;
+    void IncreaseNumVehicles() {     // Increase the array size when it's full
+        VehiclesNode *NVehicles =new VehiclesNode[capacity + 5];
+        int i =0;
         while (i < capacity) {
             NVehicles[i] = vehicle[i];
             i++;
@@ -605,25 +620,30 @@ private:
     }
 
 public:
+    // Constructor to initialize vehicle array with capacity 10
     Vehicles() : Graph(), vehicle(new VehiclesNode[10]), capacity(10), numVehicles(0) {}
 
+    // Destructor to cleaning up
     ~Vehicles() {
         delete[] vehicle;
     }
 
+    // Create a new vehicle 
     void createVehicles(const string& name, string& from_node, string& to_node, string priorityLevel) {
         Nodes* Start = findNode(from_node);
         Nodes* End = findNode(to_node);
 
+        // If either start or end node is not found, show an error message
         if (Start == nullptr || End == nullptr) {
             cout << "One or both Nodes not found!" << endl;
             return;
         }
 
         if (numVehicles >= capacity) {
-            IncreaseNumVehicles();
+            IncreaseNumVehicles();  // If vehicle array is full, increase its capacity
         }
 
+        // Create a new vehicle and set its properties
         VehiclesNode NewVehicle;
         NewVehicle.ID = name;
         NewVehicle.edge = new Edges(Start, End, 0);
@@ -631,6 +651,7 @@ public:
         vehicle[numVehicles++] = NewVehicle;
     }
 
+    // Take user input for multiple vehicles
     void Input_Vehicle() {
         string id, Start, End, priorityLevel;
         while (true) {
@@ -638,25 +659,28 @@ public:
                 IncreaseNumVehicles();
             }
 
+            // Prompt the user for vehicle details aka prompt engineering
             cout << "Enter Vehicle ID, Start Intersection, End Intersection, and Priority Level: ";
             cin >> id >> Start >> End >> priorityLevel;
             if (id == "-1") {
-                break;
+                break; 
             }
             createVehicles(id, Start, End, priorityLevel);
         }
     }
 
-    void calcaulate_route() {
+    void calcaulate_route() {   // Calculate the shortest route for each vehicle
         int distance;
         for (int i = 0; i < numVehicles; i++) {
             cout << "Vehicle with id " << vehicle[i].ID << endl;
 
+            // Use Dijkstra's algorithm to find the path
             Nodes** path = dijkstra(vehicle[i].edge->from->name, vehicle[i].edge->to->name, distance);
 
             if (path == nullptr) {
                 cout << "Node is Unreachable" << endl;
             } else {
+                // Display the path and the distance
                 cout << "Path: ";
                 int j = 0;
                 while (path[j] != nullptr) {
@@ -670,17 +694,19 @@ public:
                 cout << "Shortest Distance: " << distance << endl;
                 cout << endl;
 
-                delete[] path;
+                delete[] path;  // Clean up the allocated path array
             }
         }
     }
 
-    void vehicles_csv() {
+    void vehicles_csv() {   // Read vehicle data from CSV files
         ifstream file("vehicles.csv");
         string header;
         file >> header;
         string id, start, end;
         string priorityLevel;
+
+        // Process general vehicle data
         while (file.good()) {
             getline(file, id, ',');
             getline(file, start, ',');
@@ -696,6 +722,7 @@ public:
         ifstream file1("emergency_vehicles.csv");
         file1 >> header;
 
+        // Process emergency vehicle data
         while (file1.good()) {
             getline(file1, id, ',');
             getline(file1, start, ',');
@@ -709,12 +736,14 @@ public:
         file1.close();
     }
 
+    // Display the list of all vehicles
     void displayVehicles() {
         if (numVehicles == 0) {
             cout << "No vehicles available." << endl;
             return;
         }
 
+        // Loop through each vehicle and print its details
         cout << "Vehicles in the system:" << endl;
         for (int i = 0; i < numVehicles; i++) {
             cout << "ID: " << vehicle[i].ID << ", Start: " << vehicle[i].edge->from->name
@@ -722,9 +751,12 @@ public:
         }
     }
 
+    // Calculate the total travel time for a vehicle along a path
     int calculate_travel_time(Nodes** path, string start_name, string end_name, int red_duration) {
         int total_time = 0;
         int departure_time = 0;
+
+        // Traverse each segment of the path
         for (int index = 0; path[index + 1] != nullptr; index++) {
             Nodes* current_node = path[index];
             Nodes* next_node = path[index + 1];
@@ -733,6 +765,8 @@ public:
 
             int travel_time = edge_weight;
             int arrival_time = departure_time + travel_time;
+
+            // Check traffic light condition and calculate waiting time
             if (!is_light_green(next_node, arrival_time, red_duration)) {
                 int wait_time = calculate_wait_time(next_node, arrival_time, red_duration);
                 total_time += travel_time + wait_time;
@@ -745,7 +779,7 @@ public:
         return total_time;
     }
 
-    int get_edge_weight(Nodes* from, Nodes* to) {
+    int get_edge_weight(Nodes* from, Nodes* to) {   // Get the weight (time) of a road segment between two nodes
         for (int i = 0; i < getnumEdges(); i++) {
             if (getStreets(i).from == from && getStreets(i).to == to) {
                 return getStreets(i).weight;
@@ -754,6 +788,7 @@ public:
         return -1;
     }
 
+    // Check if the traffic light is green when a vehicle arrives at a node
     bool is_light_green(Nodes* node, int arrival_time, int red_duration) {
         if (node == nullptr) {
             cerr << "Null node in is_light_green" << endl;
@@ -764,6 +799,7 @@ public:
         return time_in_cycle < node->timing;
     }
 
+    // Calculate how long a vehicle needs to wait for a green light
     int calculate_wait_time(Nodes* node, int arrival_time, int red_duration) {
         if (node == nullptr) {
             cerr << "Null node in calculate_wait_time" << endl;
@@ -779,22 +815,29 @@ public:
     }
 
     void simulate() {
+        // Red light duration and maximum simulation time
         int red_duration = 30;
         int max_simulation_time = 300;
 
+        // Arrays to store the paths and their lengths for each vehicle
         Nodes*** vehicle_paths = new Nodes**[numVehicles];
         int* path_lengths = new int[numVehicles];
 
+        // Calculate paths for each vehicle
         for (int i = 0; i < numVehicles; i++) {
             int distance;
             Nodes** path = dijkstra(vehicle[i].edge->from->name, vehicle[i].edge->to->name, distance);
+
+            // If no path is found, print an error and skip the gari and just walk
             if (path == nullptr) {
                 std::cerr << "No path found for vehicle " << vehicle[i].ID << std::endl;
                 continue;
             }
+
+            // Count the length of the path and copy it to vehicle_paths
             int path_length = 0;
             while (path[path_length] != nullptr) {
-                path_length++;
+                  path_length++;
             }
             vehicle_paths[i] = new Nodes*[path_length + 1];
             for (int j = 0; j < path_length; j++) {
@@ -802,9 +845,12 @@ public:
             }
             vehicle_paths[i][path_length] = nullptr;
             path_lengths[i] = path_length;
+
+            // Free the original path array
             delete[] path;
         }
 
+        // Initialize vehicle positions and departure times
         int* vehicle_positions = new int[numVehicles];
         int* vehicle_departure_times = new int[numVehicles];
         for (int i = 0; i < numVehicles; i++) {
@@ -812,108 +858,124 @@ public:
             vehicle_departure_times[i] = 0;
         }
 
+        // Get the start time of the simulation
         auto start_time = std::chrono::high_resolution_clock::now();
 
         bool all_arrived = false;
+        // Continue the simulation until all vehicles reach their destinations
         while (!all_arrived) {
             auto current_real_time = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> elapsed_real = current_real_time - start_time;
             int current_simulation_time = static_cast<int>(elapsed_real.count());
 
+            // Check if all vehicles have reached their destinations
             all_arrived = true;
             for (int i = 0; i < numVehicles; i++) {
                 if (vehicle_positions[i] < path_lengths[i] - 1) {
                     all_arrived = false;
                     break;
                 }
-            }
+        }
             if (all_arrived) {
                 break;
             }
 
+            // Process each vehicle's movement
             for (int i = 0; i < numVehicles; i++) {
                 if (vehicle_positions[i] >= path_lengths[i] - 1) {
-                    continue;
+                    continue; // Skip if the vehicle has already reached its destination
                 }
 
-                Nodes* current_node = vehicle_paths[i][vehicle_positions[i]];
-                Nodes* next_node = vehicle_paths[i][vehicle_positions[i] + 1];
-                int edge_weight = get_edge_weight(current_node, next_node);
-                if (edge_weight == -1) {
-                    std::cerr << "Invalid edge for vehicle " << vehicle[i].ID << std::endl;
-                    continue;
-                }
+            Nodes* current_node = vehicle_paths[i][vehicle_positions[i]];
+            Nodes* next_node = vehicle_paths[i][vehicle_positions[i] + 1];
+            int edge_weight = get_edge_weight(current_node, next_node);
 
-                int arrival_time = vehicle_departure_times[i] + edge_weight;
-                if (arrival_time > current_simulation_time) {
-                    continue;
-                }
+            // If no valid edge, show an error and skip this vehicle
+            if (edge_weight == -1) {
+                std::cerr << "Invalid edge for vehicle " << vehicle[i].ID << std::endl;
+                continue;
+            }
 
-                if (vehicle[i].priorityLevel == "High") {
-                    vehicle_positions[i]++;
-                    vehicle_departure_times[i] = arrival_time + edge_weight;
-                    std::cout << "Emergency Vehicle " << vehicle[i].ID << " moves to " << next_node->name
-                            << " at time " << current_simulation_time << " seconds." << std::endl;
+            int arrival_time = vehicle_departure_times[i] + edge_weight;
+
+            // If the vehicle hasn't reached the next node yet, skip to the next iteration
+            if (arrival_time > current_simulation_time) {
+                continue;
+            }
+
+            // Handle emergency vehicles (high priority)
+            if (vehicle[i].priorityLevel == "High") {
+                vehicle_positions[i]++;
+                vehicle_departure_times[i] = arrival_time + edge_weight;
+                std::cout << "Emergency Vehicle " << vehicle[i].ID << " moves to " << next_node->name
+                          << " at time " << current_simulation_time << " seconds." << std::endl;
+            } else {
+                // Handle normal vehicles
+                if (!is_light_green(next_node, arrival_time, red_duration)) {
+                    int wait_time = calculate_wait_time(next_node, arrival_time, red_duration);
+                    vehicle_departure_times[i] += wait_time;
+                    std::cout << "Vehicle " << vehicle[i].ID << " is waiting at " << next_node->name
+                              << " for " << wait_time << " seconds." << std::endl;
                 } else {
-                    if (!is_light_green(next_node, arrival_time, red_duration)) {
-                        int wait_time = calculate_wait_time(next_node, arrival_time, red_duration);
-                        vehicle_departure_times[i] += wait_time;
-                        std::cout << "Vehicle " << vehicle[i].ID << " is waiting at " << next_node->name
-                                << " for " << wait_time << " seconds." << std::endl;
-                    } else {
-                        if (isCongested(current_node->name, next_node->name)) {
-                            Nodes** alternative_path = bfs(current_node->name, next_node->name);
-                            if (alternative_path != nullptr) {
-                                delete[] vehicle_paths[i];
-                                vehicle_paths[i] = alternative_path;
-                                path_lengths[i] = 0;
-                                while (alternative_path[path_lengths[i]] != nullptr) {
-                                    path_lengths[i]++;
-                                }
-                                vehicle_positions[i] = 0;
-                                vehicle_departure_times[i] = current_simulation_time;
-                            } else {
-                                std::cerr << "No alternative path found for vehicle " << vehicle[i].ID << std::endl;
+                    // Check for congestion and find an alternative path if needed
+                    if (isCongested(current_node->name, next_node->name)) {
+                        Nodes** alternative_path = bfs(current_node->name, next_node->name);
+                        if (alternative_path != nullptr) {
+                            delete[] vehicle_paths[i];
+                            vehicle_paths[i] = alternative_path;
+
+                            // Update the path length and reset the position for rerouting
+                            path_lengths[i] = 0;
+                            while (alternative_path[path_lengths[i]] != nullptr) {
+                                path_lengths[i]++;
                             }
+                            vehicle_positions[i] = 0;
+                            vehicle_departure_times[i] = current_simulation_time;
                         } else {
-                            vehicle_positions[i]++;
-                            vehicle_departure_times[i] = arrival_time + edge_weight;
-                            std::cout << "Vehicle " << vehicle[i].ID << " moves to " << next_node->name
-                                    << " at time " << current_simulation_time << " seconds." << std::endl;
+                            std::cerr << "No alternative path found for vehicle " << vehicle[i].ID << std::endl;
                         }
+                    } else {
+                        vehicle_positions[i]++;
+                        vehicle_departure_times[i] = arrival_time + edge_weight;
+                        std::cout << "Vehicle " << vehicle[i].ID << " moves to " << next_node->name
+                                  << " at time " << current_simulation_time << " seconds." << std::endl;
                     }
                 }
             }
-
-            auto current_time = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed = current_time - start_time;
-            double simulation_time = elapsed.count();
-            if (simulation_time < max_simulation_time) {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-            } else {
-                break;
-            }
         }
 
-        for (int i = 0; i < numVehicles; i++) {
-            cout << "Vehicle " << vehicle[i].ID << " path: ";
-            int j;
-            for (j = 0; j < path_lengths[i] - 1; j++) {
-                cout << vehicle_paths[i][j]->name << " -> ";
-            }
-            cout << vehicle_paths[i][j]->name << " Destination Reached." << endl;
-            cout << endl;
+        // Check if the simulation time has come at exacttt time or not
+        auto current_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = current_time - start_time;
+        double simulation_time = elapsed.count();
+        if (simulation_time < max_simulation_time) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));  // Simulate real time by sleeping 1 second
+        } else {
+            break;
         }
+    }
 
-        for (int i = 0; i < numVehicles; i++) {
-            delete[] vehicle_paths[i];
+    // After the simulation, print the paths for each vehicle
+    for (int i = 0; i < numVehicles; i++) {
+        cout << "Vehicle " << vehicle[i].ID << " path: ";
+        int j;
+        for (j = 0; j < path_lengths[i] - 1; j++) {
+            cout << vehicle_paths[i][j]->name << " -> ";
         }
-        delete[] vehicle_paths;
-        delete[] path_lengths;
-        delete[] vehicle_positions;
-        delete[] vehicle_departure_times;
+        cout << vehicle_paths[i][j]->name << " Destination Reached." << endl;
+        cout << endl;
+    }
 
-        std::cout << "Simulation complete." << std::endl;
+    // Clean up dynamically allocated memory
+    for (int i = 0; i < numVehicles; i++) {
+        delete[] vehicle_paths[i];
+    }
+    delete[] vehicle_paths;
+    delete[] path_lengths;
+    delete[] vehicle_positions;
+    delete[] vehicle_departure_times;
+
+    std::cout << "Simulation complete." << std::endl;
     }
 };
 
