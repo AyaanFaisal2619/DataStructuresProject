@@ -45,6 +45,7 @@ private:
     int nodeCapacity; // Maximum number of intersections
     int edgeCapacity; // Maximum number of roads
     int* vehicleCounts; // Number of vehicles per road
+    int hashTableSize; // Size of the hash table
 
     void resizeNodes() {   // increasing capacity of intersection
         nodeCapacity *= 2; 
@@ -62,11 +63,20 @@ private:
         streets = temp; 
     }
 
+    int hashFunction(const string& fromName, const string& toName) {
+        // Simple hash function using the sum of ASCII values of the names
+        int hash = 0;
+        for (char c : fromName) hash += c;
+        for (char c : toName) hash += c;
+        return hash % hashTableSize;
+    }
+
 public:
-    Graph() : intersections(nullptr), streets(nullptr), numNodes(0), numEdges(0), nodeCapacity(10), edgeCapacity(10), vehicleCounts(nullptr) {
+    Graph() : intersections(nullptr), streets(nullptr), numNodes(0), numEdges(0), nodeCapacity(10), edgeCapacity(10), vehicleCounts(nullptr), hashTableSize(100) {
         intersections = new Nodes[nodeCapacity]; // Initialize intersections with initial capacity of 10
         streets = new Edges[edgeCapacity]; // Initialize roads....
-        vehicleCounts = new int[edgeCapacity]; // Initialize vehicle counts...
+        vehicleCounts = new int[hashTableSize]; // Initialize vehicle counts...
+        for (int i = 0; i < hashTableSize; i++) vehicleCounts[i] = 0; // Initialize all counts to 0
     }
 
     ~Graph() { // For memory release
@@ -83,7 +93,7 @@ public:
     }
 
     Nodes* findNode(const string& name) {
-        for (int i = 0; i < numNodes; i++) {  // looooping through all nodes to find desired one
+        for (int i = 0; i < numNodes; i++) {  // looping through all nodes to find desired one
             if (intersections[i].name == name) {
                   return &intersections[i]; 
             }
@@ -101,25 +111,20 @@ public:
     }
 
     void incrementVehicleCount(const string& fromName, const string& toName) {
-            int index = findEdgeIndex(fromName, toName);  // First, find the index of the edge.
-            if (index != -1) {
-                vehicleCounts[index]++;  // If the edge exists, increment the vehicle count.
-            }
+            int index = hashFunction(fromName, toName);  // First, find the index of the edge.
+            vehicleCounts[index]++;  // If the edge exists, increment the vehicle count.
         }
 
     void decrementVehicleCount(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);  // Find the index of the edge.
-        if (index != -1 && vehicleCounts[index] > 0) {
+        int index = hashFunction(fromName, toName);  // Find the index of the edge.
+        if (vehicleCounts[index] > 0) {
             vehicleCounts[index]--;  // Decrease the vehicle count if it's above 0.
         }
     }
 
     bool isCongested(const string& fromName, const string& toName) {
-        int index = findEdgeIndex(fromName, toName);  // again finding edge's index first.
-        if (index != -1) {
-            return vehicleCounts[index] >= streets[index].capacity;  // Return true if the vehicles are more than or equal to capacity.
-        }
-        return false;  // otherwise false
+        int index = hashFunction(fromName, toName);  // again finding edge's index first.
+        return vehicleCounts[index] >= streets[findEdgeIndex(fromName, toName)].capacity;  // Return true if the vehicles are more than or equal to capacity.
     }
 
     int findNodeIndex(const string& name) {
@@ -562,8 +567,9 @@ public:
     void displayCongestion() {
         // Loop through each road and display the vehicle count
         for (int i = 0; i < numEdges; i++) {
+            int index = hashFunction(streets[i].from->name, streets[i].to->name);
             cout << "Road " << streets[i].from->name << "-" << streets[i].to->name << ": "
-                 << vehicleCounts[i] << " vehicles";
+                 << vehicleCounts[index] << " vehicles";
             // Check if the road is congested
             if (isCongested(streets[i].from->name, streets[i].to->name)) {
                 cout << " (Congested)"; // Mark as congested if true
@@ -608,8 +614,8 @@ private:
     int numVehicles;
 
     void IncreaseNumVehicles() {     // Increase the array size when it's full
-        VehiclesNode *NVehicles =new VehiclesNode[capacity + 5];
-        int i =0;
+        VehiclesNode *NVehicles = new VehiclesNode[capacity + 5];
+        int i = 0;
         while (i < capacity) {
             NVehicles[i] = vehicle[i];
             i++;
@@ -652,23 +658,25 @@ public:
     }
 
     // Take user input for multiple vehicles
-    void Input_Vehicle() {
-        string id, Start, End, priorityLevel;
+        void Input_Vehicle() {
+        string id, Start, End;
         while (true) {
             if (numVehicles == capacity) {
                 IncreaseNumVehicles();
             }
 
-            // Prompt the user for vehicle details aka prompt engineering
-            cout << "Enter Vehicle ID, Start Intersection, End Intersection, and Priority Level: ";
-            cin >> id >> Start >> End >> priorityLevel;
+            // Prompt the user for vehicle details
+            cout << "Enter Vehicle ID, Start Intersection, and End Intersection: ";
+            cin >> id >> Start >> End;
             if (id == "-1") {
                 break; 
             }
-            createVehicles(id, Start, End, priorityLevel);
+            createVehicles(id, Start, End, "Low"); // Default priority level is "Low"
+            ofstream file("vehicles.csv", std::ios::app);
+            file << id << "," << Start << "," << End << endl; 
+            file.close();
         }
     }
-
     void calcaulate_route() {   // Calculate the shortest route for each vehicle
         int distance;
         for (int i = 0; i < numVehicles; i++) {
@@ -814,77 +822,79 @@ public:
         }
     }
 
-    void simulate() {
-        // Red light duration and maximum simulation time
-        int red_duration = 30;
-        int max_simulation_time = 300;
+   void simulate() {
+    // Red light duration and maximum simulation time
+    int red_duration = 30;
+    int max_simulation_time = 300;
 
-        // Arrays to store the paths and their lengths for each vehicle
-        Nodes*** vehicle_paths = new Nodes**[numVehicles];
-        int* path_lengths = new int[numVehicles];
+    // Arrays to store the paths and their lengths for each vehicle
+    Nodes*** vehicle_paths = new Nodes**[numVehicles];
+    int* path_lengths = new int[numVehicles];
 
-        // Calculate paths for each vehicle
+    // Calculate paths for each vehicle
+    for (int i = 0; i < numVehicles; i++) {
+        int distance;
+        Nodes** path = dijkstra(vehicle[i].edge->from->name, vehicle[i].edge->to->name, distance);
+
+        // If no path is found, print an error and skip the vehicle
+        if (path == nullptr) {
+            std::cerr << "No path found for vehicle " << vehicle[i].ID << std::endl;
+            vehicle_paths[i] = nullptr;
+            path_lengths[i] = 0;
+            continue;
+        }
+
+        // Count the length of the path and copy it to vehicle_paths
+        int path_length = 0;
+        while (path[path_length] != nullptr) {
+            path_length++;
+        }
+        vehicle_paths[i] = new Nodes*[path_length + 1];
+        for (int j = 0; j < path_length; j++) {
+            vehicle_paths[i][j] = path[j];
+        }
+        vehicle_paths[i][path_length] = nullptr;
+        path_lengths[i] = path_length;
+
+        // Free the original path array
+        delete[] path;
+    }
+
+    // Initialize vehicle positions and departure times
+    int* vehicle_positions = new int[numVehicles];
+    int* vehicle_departure_times = new int[numVehicles];
+    for (int i = 0; i < numVehicles; i++) {
+        vehicle_positions[i] = 0;
+        vehicle_departure_times[i] = 0;
+    }
+
+    // Get the start time of the simulation
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    bool all_arrived = false;
+    // Continue the simulation until all vehicles reach their destinations
+    while (!all_arrived) {
+        auto current_real_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_real = current_real_time - start_time;
+        int current_simulation_time = static_cast<int>(elapsed_real.count());
+
+        // Check if all vehicles have reached their destinations
+        all_arrived = true;
         for (int i = 0; i < numVehicles; i++) {
-            int distance;
-            Nodes** path = dijkstra(vehicle[i].edge->from->name, vehicle[i].edge->to->name, distance);
-
-            // If no path is found, print an error and skip the gari and just walk
-            if (path == nullptr) {
-                std::cerr << "No path found for vehicle " << vehicle[i].ID << std::endl;
-                continue;
-            }
-
-            // Count the length of the path and copy it to vehicle_paths
-            int path_length = 0;
-            while (path[path_length] != nullptr) {
-                  path_length++;
-            }
-            vehicle_paths[i] = new Nodes*[path_length + 1];
-            for (int j = 0; j < path_length; j++) {
-                vehicle_paths[i][j] = path[j];
-            }
-            vehicle_paths[i][path_length] = nullptr;
-            path_lengths[i] = path_length;
-
-            // Free the original path array
-            delete[] path;
-        }
-
-        // Initialize vehicle positions and departure times
-        int* vehicle_positions = new int[numVehicles];
-        int* vehicle_departure_times = new int[numVehicles];
-        for (int i = 0; i < numVehicles; i++) {
-            vehicle_positions[i] = 0;
-            vehicle_departure_times[i] = 0;
-        }
-
-        // Get the start time of the simulation
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        bool all_arrived = false;
-        // Continue the simulation until all vehicles reach their destinations
-        while (!all_arrived) {
-            auto current_real_time = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed_real = current_real_time - start_time;
-            int current_simulation_time = static_cast<int>(elapsed_real.count());
-
-            // Check if all vehicles have reached their destinations
-            all_arrived = true;
-            for (int i = 0; i < numVehicles; i++) {
-                if (vehicle_positions[i] < path_lengths[i] - 1) {
-                    all_arrived = false;
-                    break;
-                }
-        }
-            if (all_arrived) {
+            if (vehicle_positions[i] < path_lengths[i] - 1) {
+                all_arrived = false;
                 break;
             }
+        }
+        if (all_arrived) {
+            break;
+        }
 
-            // Process each vehicle's movement
-            for (int i = 0; i < numVehicles; i++) {
-                if (vehicle_positions[i] >= path_lengths[i] - 1) {
-                    continue; // Skip if the vehicle has already reached its destination
-                }
+        // Process each vehicle's movement
+        for (int i = 0; i < numVehicles; i++) {
+            if (vehicle_positions[i] >= path_lengths[i] - 1) {
+                continue; // Skip if the vehicle has already reached its destination
+            }
 
             Nodes* current_node = vehicle_paths[i][vehicle_positions[i]];
             Nodes* next_node = vehicle_paths[i][vehicle_positions[i] + 1];
@@ -944,7 +954,7 @@ public:
             }
         }
 
-        // Check if the simulation time has come at exacttt time or not
+        // Check if the simulation time has come at exact time or not
         auto current_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = current_time - start_time;
         double simulation_time = elapsed.count();
@@ -957,6 +967,10 @@ public:
 
     // After the simulation, print the paths for each vehicle
     for (int i = 0; i < numVehicles; i++) {
+        if (vehicle_paths[i] == nullptr) {
+            std::cerr << "No path found for vehicle " << vehicle[i].ID << std::endl;
+            continue;
+        }
         cout << "Vehicle " << vehicle[i].ID << " path: ";
         int j;
         for (j = 0; j < path_lengths[i] - 1; j++) {
@@ -968,7 +982,9 @@ public:
 
     // Clean up dynamically allocated memory
     for (int i = 0; i < numVehicles; i++) {
-        delete[] vehicle_paths[i];
+        if (vehicle_paths[i] != nullptr) {
+            delete[] vehicle_paths[i];
+        }
     }
     delete[] vehicle_paths;
     delete[] path_lengths;
@@ -976,7 +992,7 @@ public:
     delete[] vehicle_departure_times;
 
     std::cout << "Simulation complete." << std::endl;
-    }
+}
 };
 
 int main() {
